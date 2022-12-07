@@ -19,3 +19,7 @@ install: $(TARGETS)
 uninstall: 
 	@echo "Removing $(PREFIX)/bin"
 	rm -f $(addprefix $(PREFIX)/, $(TARGETS))
+
+clean:
+	@echo "Cleaning up"
+	rm -f *~
