@@ -106,7 +106,7 @@ if [ "$VERBOSE" = true ]; then
 fi
 
 #Trying to find ID
-courseData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses?enrollment_type=teacher&state=available&per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "$courseCode")
+courseData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses?enrollment_type=teacher&state=available&per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "^$courseCode")
 courseID=$(echo "$courseData" | awk -F'*' '{print $2}')
 courseString=$(echo "$courseData" | awk -F'*' '{print $1}')
 
@@ -143,7 +143,7 @@ if [ "$VERBOSE" = true ]; then
 fi
 
 #TEST
-assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "$assignment" )
+assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "^$assignment\*" )
 
 
 assignmentID=$(echo "$assignmentData" | awk -F'*' '{print $2}')
@@ -216,14 +216,14 @@ while read line; do
     #check if student is among the submitted.
     here=$(echo "$studSubmitted" | grep -e "$ID")
     if [ -z "$here" ]; then
-	echo "$NAME have not submitted this assignment for some reason."
+	echo "$ID -- $NAME have not submitted this assignment for some reason."
 	continue;
     fi
 
 
     checkForErrorMessage=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep "The specified resource does not exist." )
     if [ ! -z "$checkForErrorMessage" ]; then
-	echo "$NAME should be ignornoSubmissioncheckForErrorMessage'"
+	echo "$ID -- $NAME should be ignornoSubmissioncheckForErrorMessage'"
 	continue;
     fi
 
@@ -237,20 +237,22 @@ while read line; do
 
     
     echo -n "$ID -- $NAME -- $EMAIL -> $location/$studFolderName "
-    #Create dir, abort if failed.?
-    mkdir -p $location/$studFolderName
-    if [ $? -ne 0 ]; then
-	echo "Cant create $location/$studFolderName";
-	exit;
-    fi
 
 
     
-    noSubmission=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep missing | grep true)
+    noSubmission=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep unsubmitted)
 
     if [ -z "$noSubmission" ]; then
 
-	echo " $noAttachements"
+	echo " submitted."
+
+	#Create dir, abort if failed.?
+	mkdir -p $location/$studFolderName
+	if [ $? -ne 0 ]; then
+	    echo "Cant create $location/$studFolderName";
+	    exit;
+	fi
+
 	
 	metaData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq '{grade,graded_at,grader_id,seconds_late,submitted_at} | to_entries|map(.value)|@csv ')
 
@@ -263,6 +265,11 @@ while read line; do
 	lateDays=$(echo "scale=0; $lateSeconds/86400"|bc )
 	lateHours=$(echo "scale=0; $lateSeconds/3600"|bc )
 
+	if [ -z "$submittedat" ]; then
+	    echo "Not submitted."
+	    continue;
+	fi
+	
 	if [ "$lateDays" -ne "0" ]; then
 	    lateTime="$lateDays days"
 	else
@@ -283,8 +290,8 @@ while read line; do
 	    echo -e "\tAssignment has not been graded, it was submitted on $submittedat ($lateTime)"
 	else
 	    echo -e "\tMETA:$grade, $gradedat, $graderid, $submittedat ($lateTime)"
-
 	fi
+	
 	if [ -z "$grade" ]; then grade="Not graded";  fi
 	if [ -z "$gradedat" ]; then gradedat="Not graded";  fi
 	if [ -z "$graderid" ]; then graderid="Not graded";  fi
@@ -314,6 +321,7 @@ while read line; do
 		echo " Problems downloading."
 	    else
 		echo " Downloaded."
+		echo -e "FILE:$dname" >> "$location/$studFolderName/META.txt"
 	    fi
 
 	done < <(echo "$aData")
@@ -328,6 +336,7 @@ while read line; do
 	    echo "$comments" > $location/$studFolderName/comments.txt
 	    commentCNT=$(echo "$comments" | wc -l | tr -d ' ')
 	    echo -e "\t$commentCNT comments found -> $location/$studFolderName/comments.txt"
+	    echo -e "COMMENT:comments" >> "$location/$studFolderName/META.txt"
 	fi
 	
 	##Grab similarity ratings
