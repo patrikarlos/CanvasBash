@@ -339,11 +339,13 @@ while read line; do
 #	    echo " "
 #	    echo "Download curl --output \"$location/$studFolderName/$dname\" -L \"$url\" "
 	    curl -s --output "$location/$studFolderName/$dname" -L "$url"
+	    datum1=$(date +%s)
+	    datum2=$(date)
 	    if [ $? -ne 0 ]; then
 		echo " Problems downloading."
 	    else
 		echo " Downloaded."
-		echo -e "FILE:$dname" >> "$location/$studFolderName/META.txt"
+		echo -e "FILE:$dname $datum1 ($datum2)" >> "$location/$studFolderName/META.txt"
 	    fi
 
 	done < <(echo "$aData")
