@@ -314,6 +314,28 @@ while read line; do
 
 	    echo -en "\t$dname ($fsize) $url " #(|$assData|)"
 
+	    ##Making sure that we will not have collisions on filenames that we will use. 
+	    if [[ "$dname" == *"Feedback.txt" ]]; then
+		echo "Changing filename, to student_Feedback.txt"
+		dname="student_Feedback.txt"
+	    fi
+
+	    if [[ "$dname" == *"META.txt" ]]; then
+		echo "Changing filename, to student_META.txt"
+		dname="student_META.txt"
+	    fi
+
+	    if [[ "$dname" == *"turnitin.txt" ]]; then
+		echo "Changing filename, to student_turnitin.txt"
+		dname="student_turnitin.txt"
+	    fi
+	    if [[ "$dname" == *"comments.txt" ]]; then
+		echo "Changing filename, to student_comments.txt"
+		dname="student_comments.txt"
+	    fi
+	    
+	    
+	    
 #	    echo " "
 #	    echo "Download curl --output \"$location/$studFolderName/$dname\" -L \"$url\" "
 	    curl -s --output "$location/$studFolderName/$dname" -L "$url"
