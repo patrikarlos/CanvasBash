@@ -395,7 +395,7 @@ while read line; do
 	
 	while read turnData; do
 	    a_id=$(echo "$turnData" | awk -F',' '{print $1}')
-	    info=$(echo "$aData" | grep $a_id)
+	    info=$(echo "$aData" | grep "$a_id")
 	    fname=$(echo "$info" | awk -F',' '{print $1}' | tr -d '"\\')
 	    fnID=$(echo "$info" | awk -F',' '{print $6}' | tr -d '"\\')
 	    score=$(echo "$turnData" | awk -F',' '{print $2}')
