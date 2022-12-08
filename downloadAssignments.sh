@@ -33,10 +33,11 @@ MISSING=false
 LATE=false
 created=0
 added=0
+DLGRADED=0;
 
 PASSWDFILE=$(mktemp)
 
-while getopts lmvhi:-: OPT; do
+while getopts glmvhi:-: OPT; do
     if [ "$OPT" = "-" ]; then
 	OPT="${OPTARG%%=*}"       # extract long option name
 	OPTARG="${OPTARG#$OPT}"   # extract long option argument (may be empty)
@@ -46,6 +47,9 @@ while getopts lmvhi:-: OPT; do
     case "${OPT}" in
 	m | missing)
 	    MISSING=true
+	    ;;
+	g | graded)
+	    DLGRADED=1
 	    ;;
 	l | late)
 	    LATE=true
@@ -241,11 +245,26 @@ while read line; do
 
     
     noSubmission=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep unsubmitted)
+    submissionGraded=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep graded)
+    
+    ## Add logic to check if its a 'new' or old (reviewed) submission. If old, and already reviewed do not work with it.
+    OVERRIDE=0
+    if [[ "$submissionGraded" && "$DLGRADED" -eq "1" ]]; then
+	submissionGraded=""
+	OVERRIDE=1
+    fi
 
-    if [ -z "$noSubmission" ]; then
 
-	echo " submitted."
+    
+    if [[ -z "$noSubmission"  && -z "$submissionGraded" ]]; then
 
+	echo -n " submitted"
+	if [ "$OVERRIDE" -eq "1" ]; then
+	    echo " (forced retreival, already graded)."
+	else
+	    echo "."
+	fi
+	
 	#Create dir, abort if failed.?
 	mkdir -p $location/$studFolderName
 	if [ $? -ne 0 ]; then
@@ -265,6 +284,8 @@ while read line; do
 	lateDays=$(echo "scale=0; $lateSeconds/86400"|bc )
 	lateHours=$(echo "scale=0; $lateSeconds/3600"|bc )
 
+	graderName=$(echo "$emname" | tr -d '"' | grep "^$graderid," | awk -F',' '{print $3}' )
+	
 	if [ -z "$submittedat" ]; then
 	    echo "Not submitted."
 	    continue;
@@ -289,7 +310,7 @@ while read line; do
 	if [ -z "$grade" ]; then	   
 	    echo -e "\tAssignment has not been graded, it was submitted on $submittedat ($lateTime)"
 	else
-	    echo -e "\tMETA:$grade, $gradedat, $graderid, $submittedat ($lateTime)"
+	    echo -e "\tMETA:$grade, $gradedat, $graderid ($graderName), $submittedat ($lateTime)"
 	fi
 	
 	if [ -z "$grade" ]; then grade="Not graded";  fi
@@ -397,11 +418,18 @@ while read line; do
 	
 	
     else
-	echo		" -- Missing Submission -- "
-	if [ -z "$missingStudents" ]; then
-	    missingStudents="$ID -- $NAME -- $EMAIL"
-	else
-	    missingStudents="$missingStudents\n$ID -- $NAME -- $EMAIL"
+	
+	if [ ! -z "$noSubmission" ]; then 
+	    
+	    echo " -- Missing Submission -- "
+	    if [ -z "$missingStudents" ]; then
+		missingStudents="$ID -- $NAME -- $EMAIL"
+	    else
+		missingStudents="$missingStudents\n$ID -- $NAME -- $EMAIL"
+	    fi
+	fi
+	if [ ! -z "$submissionGraded" ]; then
+	    echo " -- Already Graded -- "
 	fi
     fi 
 
