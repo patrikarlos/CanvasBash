@@ -2,8 +2,8 @@ PWD=$(shell pwd)
 DESTDIR=$(HOME)
 PREFIX=$(DESTDIR)
 
-EXECUTABLES = jq curl
-TARGETS= downloadAssignments.sh listAssignments.sh listMyCourses.sh
+EXECUTABLES = jq curl md5
+TARGETS= downloadAssignments.sh listAssignments.sh listMyCourses.sh uploadFeedback.sh
 
 
 test:
