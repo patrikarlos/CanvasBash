@@ -254,6 +254,12 @@ while read line; do
     
     echo -n "$ID -- $NAME -- $EMAIL -> $location/$studFolderName "
 
+
+    if [[ ! -d "$location/$studFolderName" ]]; then
+	echo "Not in review folder."
+	continue;
+    fi
+    
     
     noSubmission=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep unsubmitted)
     submissionGraded=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep graded)
@@ -287,11 +293,14 @@ while read line; do
 	
 	FEEDBACK=0
 	GRADE=-1
-	if [ -e "$location/$studFolderName/feedback.txt" ]; then
-	    #	    echo -e "\tFeedback present."
+	echo "$location/$studFolderName/feedback.txt" 
+	if [[ -e "$location/$studFolderName/feedback.txt" ]]; then
+	    echo -e "\tFeedback present."
 	    GRADE=$(grep 'GRADE:'  "$location/$studFolderName/feedback.txt" |  awk -F: '{print $2}' )
 	    FEEDBACK=1
 	    feedback_string=$(cat "$location/$studFolderName/feedback.txt" )
+	else
+	    echo -e "\tNo feedback.txt found, has it been reviewed?"
 	fi
 
 
