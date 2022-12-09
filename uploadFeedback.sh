@@ -34,10 +34,10 @@ LATE=false
 created=0
 added=0
 PUSHGRADED=0
+DRYRUN=0
 
 
-
-while getopts plmvhi:-: OPT; do
+while getopts dplmvhi:-: OPT; do
     if [ "$OPT" = "-" ]; then
 	OPT="${OPTARG%%=*}"       # extract long option name
 	OPTARG="${OPTARG#$OPT}"   # extract long option argument (may be empty)
@@ -51,6 +51,9 @@ while getopts plmvhi:-: OPT; do
 	p | push)
 	    PUSHGRADED=1
 	    ;;
+	d | dryrun)
+	    DRYRUN=1
+	    ;;       
 	l | late)
 	    LATE=true
 	    ;;	
@@ -96,7 +99,12 @@ if [ -z "$assignment" ]; then
 fi
 
 if [ -z "$location" ]; then
-    echo "Your missing the location where to store the downloaded data."
+    echo "Your missing the location where the data is stored."
+    exit;
+fi
+
+if [[ ! -d "$location" ]]; then
+    echo "$location does not exist."
     exit;
 fi
 
@@ -285,20 +293,41 @@ while read line; do
 	    FEEDBACK=1
 	    feedback_string=$(cat "$location/$studFolderName/feedback.txt" )
 	fi
-	
+
+
 	upload=""
-	findFiles=$(grep FILE "$location/$studFolderName/META.txt" | awk -F: '{print $2}' | awk '{print $1}' )
-	for file in $findFiles; do
-	    
-	    storeTime=$(grep $file "$location/$studFolderName/META.txt" | awk -F: '{print $2}' | awk '{print $2}' )
-	    fileSystemTime=$(date -r "$location/$studFolderName/$file" "+%s" )
+	findFiles=$(grep FILE: "$location/$studFolderName/META.txt" | awk -F: '{print $2}' | awk -F'/' '{print $1}' )
+	while read file ; do
+#	    echo "file=|$file|"
+	    storeTime=$(grep "$file" "$location/$studFolderName/META.txt" | grep  -v "FILEHASH:" | awk -F: '{print $2}' | awk -F'/' '{print $2}' )
+	    fileSystemTime=$(date -r "$location/$studFolderName"/"$file" "+%s" )
 
 	    diffTime=$(echo "scale=1;$fileSystemTime-$storeTime"|bc)
-	    echo -e "\tfile =$file  >  $fileSystemTime - $storeTime = $diffTime "
-	    if [ "$diffTime" -gt "60" ]; then
-		upload+="$file "
+
+#	    if [ "$diffTime" -gt "60" ]; then
+#		echo -e "\tfile =$file  local file is $diffTime (s) younger (upload)." #		echo -e "$fileSystemTime - $storeTime = $diffTime (s) (upload)"
+#		upload+="$file\n"
+#	    fi
+
+	    ##check hash
+	    fileSysHash=$(md5 -q "$location/$studFolderName"/"$file")
+	    storeHash=$(grep "$file" "$location/$studFolderName/META.txt" | grep  -v "FILE:" | awk -F: '{print $2}' | awk -F'/' '{print $2}' )
+
+	    if [[ "$storeHash" == "$fileSysHash" ]]; then
+#		#Identical hash, no change.
+		echo -en "\t$file - $fileSysHash == $storeHash  (no change)\n"
+	    else
+		echo -en "\t$file - $fileSysHash != $storeHash  (upload)\n"
+		upload+="$file\n"
 	    fi
-	done
+
+	done < <(echo "$findFiles")
+
+
+#	echo -e "upload = |$upload|"
+	upload=$(echo -e "$upload" |  uniq  )
+#	echo "Deduplicated"
+#	echo -e "upload = |$upload|"	
 
 
 	if [[ "$OVERRIDE" == "1" ]]; then
@@ -323,56 +352,67 @@ while read line; do
 	if [ "$FEEDBACK" -eq "1" ]; then
 	    echo -en "\tPush feedback to Canvas."
 	    ##Send feedback
-#	    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" -d "submission[posted_grade]=$GRADE" | jq )
-	    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" | jq | grep comment | grep "$feedback_string" | wc -l )
-	    if [ "$sendFeedback" -eq 0 ]; then
-		echo "Problems sending feedback (as comment)"
+	    if [[ "$DRYRUN" == "1" ]]; then
+		echo -e "\t**DRYRUN** Sending Feedback\n<begin>\n$feedback_string\n<end>\n"
 	    else
-		echo " OK."
-	    fi
-	fi
-
-	if [ "$upload" ]; then
-	    echo -e "\tPush files ($upload) to Canvas."
-	    for fname in $upload; do
-		echo -en "\t\t$fname "
-		#upload, grab id, attach to submission.
-#		echo "curl -s -H \"Authorization: Bearer $TOKEN\" \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files\" -F \"name=$fname\" | jq "
-		ulData=$(curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files" -F "name=$fname" | jq )
-
-		ulParams=$(echo "$ulData" | jq '{upload_params}[]' | tr -d '{} ' | sed 's/\":\"/=/g' | tr -d '",' | sed '/^$/d')
-
-		#grap uploadURL
-		upload_url=$(echo "$ulData" | grep 'upload_url' | awk -F'":' '{print $2}' | tr -d ',"')
-#		echo "upload_url=$upload_url"
-		#upload file
-		ULPARAMSTRING=""
-		for FORM in $ulParams; do
-		    ULPARAMSTRING+="--form $FORM "
-		done
-		ULPARAMSTRING+="--form file=@$location/$studFolderName/$fname "
-		ULPARAMSTRING+="--form key=/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files/$fname "
-#		echo "curl $ULPARAMSTRING $upload_url "
-		uploadFile=$(curl -s $ULPARAMSTRING $upload_url | jq )
-
-
-		fileID=$(echo "$uploadFile" | jq '{id}|to_entries|map(.value)|@tsv' | tr -d '"')
-		##GRAB id, push as comment.
-
-#		echo "fileID=$fileID"
-
-#		echo "curl -s -H \"Authorization: Bearer $TOKEN\" -X PUT  \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID\" -d \"comment[text_comment]=Uploaded File:$fname\" -d \"comment[file_ids]=$fileID\" "
-		sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=Uploaded File:$fname" -d "comment[file_ids]=$fileID" | jq | grep comment | grep "Uploaded File:$fname" | wc -l)
-#		echo "sendFeedback=|$sendFeedback|"
+		#	    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" -d "submission[posted_grade]=$GRADE" | jq )
+		sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" | jq | grep comment | grep "$feedback_string" | wc -l )
 		if [ "$sendFeedback" -eq 0 ]; then
 		    echo "Problems sending feedback (as comment)"
 		else
 		    echo " OK."
-		fi		
-		
+		fi
+	    fi
+	fi
+
+	if [ "$upload" ]; then
+	    uploadString=$(echo -en "$upload" | tr '\n' ' ')
+	    echo -e "\tPush files ($uploadString) to Canvas."
+	    while read fname; do
+		echo -en "\t\t$fname "
+		if [[ "$DRYRUN" == "1" ]]; then
+		    echo -e "\t**DRYRUN** Sending File: $fname"
+		else
+		    
+		    #upload, grab id, attach to submission.
+		    #		echo "curl -s -H \"Authorization: Bearer $TOKEN\" \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files\" -F \"name=$fname\" | jq "
+		    ulData=$(curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files" -F "name=$fname" | jq )
+		    
+		    ulParams=$(echo "$ulData" | jq '{upload_params}[]' | tr -d '{} ' | sed 's/\":\"/=/g' | tr -d '",' | sed '/^$/d')
+		    
+		    #grap uploadURL
+		    upload_url=$(echo "$ulData" | grep 'upload_url' | awk -F'":' '{print $2}' | tr -d ',"')
+		    #		echo "upload_url=$upload_url"
+		    #upload file
+		    ULPARAMSTRING=""
+		    for FORM in $ulParams; do
+			ULPARAMSTRING+="--form $FORM "
+		    done
+		    ULPARAMSTRING+="--form file=@$location/$studFolderName/$fname "
+		    ULPARAMSTRING+="--form key=/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files/$fname "
+		    #		echo "curl $ULPARAMSTRING $upload_url "
+		    uploadFile=$(curl -s $ULPARAMSTRING $upload_url | jq )
+		    
+		    
+		    fileID=$(echo "$uploadFile" | jq '{id}|to_entries|map(.value)|@tsv' | tr -d '"')
+		    ##GRAB id, push as comment.
+		    
+		    #		echo "fileID=$fileID"
+		    
+		    #		echo "curl -s -H \"Authorization: Bearer $TOKEN\" -X PUT  \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID\" -d \"comment[text_comment]=Uploaded File:$fname\" -d \"comment[file_ids]=$fileID\" "
+		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=Uploaded File:$fname" -d "comment[file_ids]=$fileID" | jq | grep comment | grep "Uploaded File:$fname" | wc -l)
+		    #		echo "sendFeedback=|$sendFeedback|"
+		    if [ "$sendFeedback" -eq 0 ]; then
+			echo "Problems sending feedback (as comment)"
+		    else
+			echo " OK."
+		    fi		
+		fi
 #		echo -e "Got;\n-------$uploadFile\n----------\n"
 
-	    done
+	    done < <(echo "$upload")
+
+
 	    
 	fi
 
@@ -380,11 +420,15 @@ while read line; do
 	if [[ "$GRADE" -ne "-1" ]]; then
 	    ##PUSH GRADE new or update does not matter.
 	    echo -en "\tPush Grade."
-	    sendGrade=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "submission[posted_grade]=$GRADE" | jq | grep '\"grade\":' | tr -d ', ' | wc -l )
-	    if [ "$sendGrade" -eq 0 ]; then
-		echo "Problems sending grade. "
+	    if [[ "$DRYRUN" == "1" ]]; then
+		echo -e "\t**DRYRUN** Sending Grade: $GRADE"
 	    else
-		echo " OK."
+		sendGrade=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "submission[posted_grade]=$GRADE" | jq | grep '\"grade\":' | tr -d ', ' | wc -l )
+		if [ "$sendGrade" -eq 0 ]; then
+		    echo "Problems sending grade. "
+		else
+		    echo " OK."
+		fi
 	    fi
 	fi
 	
