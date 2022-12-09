@@ -371,9 +371,9 @@ while read line; do
 		datum1=$(date +%s)
 		datum2=$(date)
 		echo -n " Downloaded."
-		echo "FILE:$dname $datum1 ($datum2)" >> "$location/$studFolderName/META.txt"
+		echo "FILE:$dname/$datum1/($datum2)" >> "$location/$studFolderName/META.txt"
 		fileHASH=$(md5 -q "$location/$studFolderName/$dname" )
-		echo "FILEHASH:$dname $fileHASH" >> "$location/$studFolderName/META.txt"
+		echo "FILEHASH:$dname/$fileHASH" >> "$location/$studFolderName/META.txt"
 		echo " Hashed "
 	    fi
 
