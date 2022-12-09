@@ -293,7 +293,7 @@ while read line; do
 	
 	FEEDBACK=0
 	GRADE=-1
-	echo "$location/$studFolderName/feedback.txt" 
+#	echo "$location/$studFolderName/feedback.txt" 
 	if [[ -e "$location/$studFolderName/feedback.txt" ]]; then
 	    echo -e "\tFeedback present."
 	    GRADE=$(grep 'GRADE:'  "$location/$studFolderName/feedback.txt" |  awk -F: '{print $2}' )
