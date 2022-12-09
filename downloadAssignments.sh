@@ -147,7 +147,8 @@ if [ "$VERBOSE" = true ]; then
 fi
 
 #TEST
-assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "^$assignment\*" )
+assignmentsData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"')
+assignmentData=$(echo "$assignmentsData" | grep "$assignment\*")
 
 
 assignmentID=$(echo "$assignmentData" | awk -F'*' '{print $2}')
@@ -165,7 +166,11 @@ if [[ "$found" -gt "1" ]]; then
 fi
 
 if [ -z "$assignmentID" ]; then
-    echo "Did not find the assignmen. Check your syntax,|$assignment|."
+    echo "Did not find the assignment, check your syntax,|$assignment|."
+    echo "You need the full name, probably within quotes."
+    echo "These are the assignments for this class."
+    echo "Working with; |$assignmentsData|"
+
     exit;
 fi
 
@@ -360,13 +365,16 @@ while read line; do
 #	    echo " "
 #	    echo "Download curl --output \"$location/$studFolderName/$dname\" -L \"$url\" "
 	    curl -s --output "$location/$studFolderName/$dname" -L "$url"
-	    datum1=$(date +%s)
-	    datum2=$(date)
 	    if [ $? -ne 0 ]; then
 		echo " Problems downloading."
 	    else
-		echo " Downloaded."
-		echo -e "FILE:$dname $datum1 ($datum2)" >> "$location/$studFolderName/META.txt"
+		datum1=$(date +%s)
+		datum2=$(date)
+		echo -n " Downloaded."
+		echo "FILE:$dname $datum1 ($datum2)" >> "$location/$studFolderName/META.txt"
+		fileHASH=$(md5 -q "$location/$studFolderName/$dname" )
+		echo "FILEHASH:$dname $fileHASH" >> "$location/$studFolderName/META.txt"
+		echo " Hashed "
 	    fi
 
 	done < <(echo "$aData")
@@ -435,7 +443,7 @@ while read line; do
 
     
 
-done < <(echo "$emStrip" | head -10 )
+done < <(echo "$emStrip") # | head -10 )
 
 if [ "$LATE" = true ]; then    
     echo "Late submission"
