@@ -1,5 +1,5 @@
 PWD=$(shell pwd)
-DESTDIR=$(HOME)/bin
+DESTDIR=$(HOME)
 PREFIX=$(DESTDIR)
 
 EXECUTABLES = jq curl
@@ -18,7 +18,7 @@ install: $(TARGETS)
 
 uninstall: 
 	@echo "Removing $(PREFIX)/bin"
-	rm -f $(addprefix $(PREFIX)/, $(TARGETS))
+	rm -f $(addprefix $(PREFIX)/bin/, $(TARGETS))
 
 clean:
 	@echo "Cleaning up"
