@@ -27,7 +27,17 @@ die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
 needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
 
 
-
+if [[ $(uname) == "Linux" ]]; then
+    HASHALGO=md5sum
+    HASHARG=
+elif [[ $(uname) == "Darwin" ]]; then
+    HASHALGO=md5
+    HASHARG=-q
+else
+    HASHALGO=md5sum
+    HASHARG=--quiet
+fi
+    
 VERBOSE=false
 MISSING=false
 LATE=false
@@ -280,11 +290,11 @@ while read line; do
 	
 	metaData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq '{grade,graded_at,grader_id,seconds_late,submitted_at} | to_entries|map(.value)|@csv ')
 
-	grade=$(echo "$metaData" | awk -F',' '{print $1}' | tr -d '"\')
-	gradedat=$(echo "$metaData" | awk -F',' '{print $2}' | tr -d '"\')
-	graderid=$(echo "$metaData" | awk -F',' '{print $3}' | tr -d '"\')
-	lateSeconds=$(echo "$metaData" | awk -F',' '{print $4}' | tr -d '"\')
-	submittedat=$(echo "$metaData" | awk -F',' '{print $5}' | tr -d '"\')
+	grade=$(echo "$metaData" | awk -F',' '{print $1}' | tr -d '"\\')
+	gradedat=$(echo "$metaData" | awk -F',' '{print $2}' | tr -d '"\\')
+	graderid=$(echo "$metaData" | awk -F',' '{print $3}' | tr -d '"\\')
+	lateSeconds=$(echo "$metaData" | awk -F',' '{print $4}' | tr -d '"\\')
+	submittedat=$(echo "$metaData" | awk -F',' '{print $5}' | tr -d '"\\')
 
 	lateDays=$(echo "scale=0; $lateSeconds/86400"|bc )
 	lateHours=$(echo "scale=0; $lateSeconds/3600"|bc )
@@ -372,7 +382,7 @@ while read line; do
 		datum2=$(date)
 		echo -n " Downloaded."
 		echo "FILE:$dname/$datum1/($datum2)" >> "$location/$studFolderName/META.txt"
-		fileHASH=$(md5 -q "$location/$studFolderName/$dname" )
+		fileHASH=$($HASHALGO $HASHARG "$location/$studFolderName/$dname" )
 		echo "FILEHASH:$dname/$fileHASH" >> "$location/$studFolderName/META.txt"
 		echo " Hashed "
 	    fi
@@ -393,7 +403,13 @@ while read line; do
 	fi
 	
 	##Grab similarity ratings
-	turnit=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID?include[]=submission_comments" | jq -r '.turnitin_data | to_entries[] | select(.key|startswith("attachment"))|.value | {attachment_id,similarity_score,report_url} | to_entries | map(.value) | @csv' )
+	turnit=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID?include[]=submission_comments" | jq -r '.turnitin_data' )
+	if  [[ "$turnit" == *"null"* ]]; then
+	    turnit=""
+
+	else
+	    turnit=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID?include[]=submission_comments" | jq -r '.turnitin_data | to_entries[] | select(.key|startswith("attachment"))|.value | {attachment_id,similarity_score,report_url} | to_entries | map(.value) | @csv' )
+	fi
 
 
 	echo -e "\tPlagiarism report(s)"
@@ -437,7 +453,10 @@ while read line; do
 	    fi
 	fi
 	if [ ! -z "$submissionGraded" ]; then
-	    echo " -- Already Graded -- "
+	    submissionGrade=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep entered_grade | awk -F':' '{print $2}' | tr -d '", ')
+	    submissionGradedAt=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep graded_at | awk '{print $2}' | tr -d '", ')
+	    submissionGraderID=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" |jq  | grep 'grader_id' | awk '{print $2}' | tr -d '", ' )
+	    echo " -- Already Graded -- $submissionGrade $submissionGradedAt ($submissionGraderID)"
 	fi
     fi 
 
