@@ -37,7 +37,10 @@ PUSHGRADED=0
 DRYRUN=0
 
 if [[ $(uname) == *"Linux" ]];then 
-    alias md5='md5sum'
+    MD5TOOL='md5sum '
+fi
+if [[ $(uname) == *"Darwin" ]];then 
+    MD5TOOL='md5 -q'
 fi
 
 while getopts dplmvhi:-: OPT; do
@@ -322,14 +325,17 @@ while read line; do
 #	    fi
 
 	    ##check hash
-	    fileSysHash=$(md5 -q "$location/$studFolderName"/"$file")
+	    fileSysHash=$($MD5TOOL "$location/$studFolderName"/"$file")
 	    storeHash=$(grep "$file" "$location/$studFolderName/META.txt" | grep  -v "FILE:" | awk -F: '{print $2}' | awk -F'/' '{print $2}' )
 
+	    fileSysHash=$(echo "$fileSysHash" | awk '{print $1}')
+	    storeHash=$(echo "$storeHash" | awk '{print $1}')
+	    
 	    if [[ "$storeHash" == "$fileSysHash" ]]; then
 #		#Identical hash, no change.
 		echo -en "\t$file - $fileSysHash == $storeHash  (no change)\n"
 	    else
-		echo -en "\t$file - $fileSysHash != $storeHash  (upload)\n"
+		echo -en "\t$file - |$fileSysHash| != |$storeHash|  (upload)\n"
 		upload+="$file\n"
 	    fi
 
