@@ -36,6 +36,9 @@ added=0
 PUSHGRADED=0
 DRYRUN=0
 
+if [[ $(uname) == *"Linux" ]];then 
+    alias md5='md5sum'
+fi
 
 while getopts dplmvhi:-: OPT; do
     if [ "$OPT" = "-" ]; then
