@@ -16,6 +16,11 @@ install: $(TARGETS)
 	@echo "Installing to $(PREFIX)/bin"
 	install -m 0755 $^ $(PREFIX)/bin
 
+update: $(TARGETS)
+	@echo "Updating $(PREFIX)/bin"
+	install -m 0755 $^ $(PREFIX)/bin
+
+
 uninstall: 
 	@echo "Removing $(PREFIX)/bin"
 	rm -f $(addprefix $(PREFIX)/bin/, $(TARGETS))
