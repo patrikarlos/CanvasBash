@@ -3,7 +3,7 @@ DESTDIR=$(HOME)
 PREFIX=$(DESTDIR)
 
 EXECUTABLES = jq curl md5
-TARGETS= downloadAssignments.sh listAssignments.sh listMyCourses.sh uploadFeedback.sh
+TARGETS= downloadAssignments.sh listAssignments.sh listMyCourses.sh uploadFeedback.sh remainToReview.sh
 
 
 test:
