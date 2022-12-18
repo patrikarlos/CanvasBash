@@ -406,8 +406,8 @@ while read line; do
 		    for FORM in $ulParams; do
 			ULPARAMSTRING+="--form $FORM "
 		    done
-		    ULPARAMSTRING+="--form file=@$location/$studFolderName/$fname "
-		    ULPARAMSTRING+="--form key=/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files/$fname "
+		    ULPARAMSTRING+="--form 'file=@$location/$studFolderName/$fname' "
+		    ULPARAMSTRING+="--form 'key=/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files/$fname' "
 		    #		echo "curl $ULPARAMSTRING $upload_url "
 		    uploadFile=$(curl -s $ULPARAMSTRING $upload_url | jq )
 		    
