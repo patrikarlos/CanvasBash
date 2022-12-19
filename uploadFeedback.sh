@@ -404,6 +404,11 @@ while read line; do
 	    echo -e "\tPush files ($uploadString) to Canvas."
 	    while read fname; do
 		echo -en "\t\t|$fname| "
+		whiteSpace="[[:space:]]+"
+		if [[ $fname =~ $whiteSpace ]]; then
+		    echo "Filename has one or more spaces, please fix."
+		    continue;
+		fi
 		if [[ "$DRYRUN" == "1" ]]; then
 		    echo -e "\t**DRYRUN** Sending File: $fname"
 		else
