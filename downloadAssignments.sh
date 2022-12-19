@@ -369,6 +369,12 @@ while read line; do
 		echo "Changing filename, to student_comments.txt"
 		dname="student_comments.txt"
 	    fi
+
+	    $whiteSpacePattern="[[:space:]]+"
+	    if [[ $dname =~ $pattern ]]; then
+		echo "Replacing :space: with '_' in filename"
+		dname=$(echo "$dname" | sed 's/\s+/_/g')
+	    fi
 	    
 	    
 	    
