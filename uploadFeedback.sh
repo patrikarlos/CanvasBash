@@ -35,6 +35,7 @@ created=0
 added=0
 PUSHGRADED=0
 DRYRUN=0
+SILENT=0;
 
 if [[ $(uname) == *"Linux" ]];then 
     MD5TOOL='md5sum '
@@ -62,7 +63,10 @@ while getopts dplmvhi:-: OPT; do
 	    ;;       
 	l | late)
 	    LATE=true
-	    ;;	
+	    ;;
+	s | silent)
+	    SILENT=true
+	    ;;
         h)
             echo "usage: $0 [-v] [--late] [--missing] <COURSECODE> <ASSIGNMENT>" >&2
             exit 2
@@ -258,13 +262,18 @@ while read line; do
     noAttachements=$(echo "$aData" | wc -l | tr -d ' ')								     
 
     
-    echo -n "$ID -- $NAME -- $EMAIL -> $location/$studFolderName "
+
 
 
     if [[ ! -d "$location/$studFolderName" ]]; then
-	echo "Not in review folder."
+	if [[ "$SILENT" != "true" ]]; then
+	   echo -n "$ID -- $NAME -- $EMAIL -> $location/$studFolderName "
+	   echo "Not in review folder."
+	fi
 	continue;
     fi
+
+    echo -n "$ID -- $NAME -- $EMAIL -> $location/$studFolderName "
     
     
     noSubmission=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep unsubmitted)
@@ -314,10 +323,17 @@ while read line; do
 	findFiles=$(grep FILE: "$location/$studFolderName/META.txt" | awk -F: '{print $2}' | awk -F'/' '{print $1}' )
 	while read file ; do
 #	    echo "file=|$file|"
+	    
 	    storeTime=$(grep "$file" "$location/$studFolderName/META.txt" | grep  -v "FILEHASH:" | awk -F: '{print $2}' | awk -F'/' '{print $2}' )
-	    fileSystemTime=$(date -r "$location/$studFolderName"/"$file" "+%s" )
+	    if [[ -f "$location/$studFolderName"/"$file" ]]; then
+		fileSystemTime=$(date -r "$location/$studFolderName"/"$file" "+%s" )
+		diffTime=$(echo "scale=1;$fileSystemTime-$storeTime"|bc)
+	    else
+		## file is missing..
+		echo "\t\t|$file| was found in META.txt, but on in submission folder."
+		continue;
+	    fi
 
-	    diffTime=$(echo "scale=1;$fileSystemTime-$storeTime"|bc)
 
 #	    if [ "$diffTime" -gt "60" ]; then
 #		echo -e "\tfile =$file  local file is $diffTime (s) younger (upload)." #		echo -e "$fileSystemTime - $storeTime = $diffTime (s) (upload)"
@@ -342,7 +358,7 @@ while read line; do
 	done < <(echo "$findFiles")
 
 
-#	echo -e "upload = |$upload|"
+	echo -e "upload = |$upload|"
 	upload=$(echo -e "$upload" |  uniq  )
 #	echo "Deduplicated"
 #	echo -e "upload = |$upload|"	
@@ -387,38 +403,45 @@ while read line; do
 	    uploadString=$(echo -en "$upload" | tr '\n' ' ')
 	    echo -e "\tPush files ($uploadString) to Canvas."
 	    while read fname; do
-		echo -en "\t\t$fname "
+		echo -en "\t\t|$fname| "
 		if [[ "$DRYRUN" == "1" ]]; then
 		    echo -e "\t**DRYRUN** Sending File: $fname"
 		else
 		    
 		    #upload, grab id, attach to submission.
-		    #		echo "curl -s -H \"Authorization: Bearer $TOKEN\" \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files\" -F \"name=$fname\" | jq "
-		    ulData=$(curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files" -F "name=$fname" | jq )
-		    
-		    ulParams=$(echo "$ulData" | jq '{upload_params}[]' | tr -d '{} ' | sed 's/\":\"/=/g' | tr -d '",' | sed '/^$/d')
+#		    echo "curl -s -H \"Authorization: Bearer $TOKEN\" \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files\" -F \"name='$fname'\" | jq "
+		    ulData=$(curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files" -F "name='$fname'" | jq )
+
+		    echo "$ulData" | jq '{upload_params}[]' | tee -a "ulData" 
+#		    ulParams=$(echo "$ulData" | jq '{upload_params}[]' | tr -d '{}' | sed 's/\":\"/=/g' | tr -d '",' | sed '/^$/d')
+		    ulParams=$(echo "$ulData" | jq '{upload_params}[]' | tr -d '{},' | sed '/^$/d' | sed 's/\": \"/=/g' | sed 's/^  //g')
 		    
 		    #grap uploadURL
 		    upload_url=$(echo "$ulData" | grep 'upload_url' | awk -F'":' '{print $2}' | tr -d ',"')
 		    #		echo "upload_url=$upload_url"
 		    #upload file
 		    ULPARAMSTRING=""
-		    for FORM in $ulParams; do
+		    echo -e "\nULPARAM == '$ulParams' \n"
+		    while read FORM; do 
 			ULPARAMSTRING+="--form $FORM "
-		    done
-		    ULPARAMSTRING+="--form 'file=@$location/$studFolderName/$fname' "
-		    ULPARAMSTRING+="--form 'key=/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files/$fname' "
-		    #		echo "curl $ULPARAMSTRING $upload_url "
+			echo "--form $FORM "
+		    done < <(echo "$ulParams")
+		    
+		    ULPARAMSTRING+="--form file=\"@$location/$studFolderName/$fname\" "
+		    ULPARAMSTRING+="--form key=\"/courses/$courseID/assignments/$assignmentID/submissions/$ID/comments/files/$fname\" "
+		    echo -e "\n-----------------"
+		    echo "curl $ULPARAMSTRING $upload_url \n"
+		    echo "----------------\n"
 		    uploadFile=$(curl -s $ULPARAMSTRING $upload_url | jq )
 		    
-		    
+		    echo "Send feedback"
 		    fileID=$(echo "$uploadFile" | jq '{id}|to_entries|map(.value)|@tsv' | tr -d '"')
 		    ##GRAB id, push as comment.
 		    
 		    #		echo "fileID=$fileID"
 		    
 		    #		echo "curl -s -H \"Authorization: Bearer $TOKEN\" -X PUT  \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID\" -d \"comment[text_comment]=Uploaded File:$fname\" -d \"comment[file_ids]=$fileID\" "
-		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=Uploaded File:$fname" -d "comment[file_ids]=$fileID" | jq | grep comment | grep "Uploaded File:$fname" | wc -l)
+		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=Uploaded File:'$fname'" -d "comment[file_ids]=$fileID" | jq | grep comment | grep "Uploaded File:$fname" | wc -l)
 		    #		echo "sendFeedback=|$sendFeedback|"
 		    if [ "$sendFeedback" -eq 0 ]; then
 			echo "Problems sending feedback (as comment)"
