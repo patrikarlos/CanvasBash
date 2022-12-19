@@ -53,5 +53,5 @@ if [[ "$GRADED" == "1" ]]; then
     echo "$grades"
 else
     
-    echo "$graded $reviewed/$assignments   (Graded Reviewed/Assignments)"
+    echo "$graded $reviewed/$assignments"
 fi
