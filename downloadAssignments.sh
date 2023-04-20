@@ -338,6 +338,24 @@ while read line; do
 	echo -e "GRADE:$grade\nGRADEDAT:$gradedat\nGRADERID:$graderid\nLATESECONDS:$lateSeconds\nLATEDAYS:$lateDays\nLATEHOURS:$lateHours\nSUBMITTEDAT:$submittedat" >> "$location/$studFolderName/META.txt"
 
 
+	##if student submitted a URL
+	urlData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq '.url' | tr -d '"')
+	if [[ ! -z "$urlData" ]];then
+	    echo -en "\t$urlData."
+	    echo "$urlData" > "$location/$studFolderName/submitted_url"
+
+	    datum1=$(date +%s)
+	    datum2=$(date)
+	    echo -n " Saved."
+	    echo "URL:$urlData" >> "$location/$studFolderName/META.txt"
+	    echo "FILE:submitted_url/$datum1/($datum2)" >> "$location/$studFolderName/META.txt"
+	    fileHASH=$($HASHALGO $HASHARG "$location/$studFolderName/submitted_url" )
+	    echo "FILEHASH:submitted_url/$fileHASH" >> "$location/$studFolderName/META.txt"
+	    echo " Hashed "
+	    
+	fi
+
+	
 	aData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq '.attachments[] | {display_name,size,updated_at,filename,url,id,created_at, updated_at} | to_entries|map(.value)|@csv ')
 	noAttachements=$(echo "$aData" | wc -l | tr -d ' ')
 
@@ -369,7 +387,10 @@ while read line; do
 		echo "Changing filename, to student_comments.txt"
 		dname="student_comments.txt"
 	    fi
-	    
+
+	    if [[ "$dname" == "websnappr"*  ]]; then
+		echo "This ($dname) is most probably a Canvas generated file."
+	    fi
 	    
 	    
 #	    echo " "
