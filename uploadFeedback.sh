@@ -2,12 +2,30 @@
 # Download student submissions from a Canvas Course.
 #
 # Syntax:
-#      downloadAssignments.sh [-v] [-h] CourseCode AssignmentID
+#       uploadFeedback.sh [-v] [-h] CourseCode AssignmentID Location
 # 
 #
 #
 # Description
+# Uploads feedback and grades, from location folder. It assumes that
+# the location folder holds one folder for each student (named as
+# student). In that folder a META.txt and a feedback.txt files are
+# expected to be found. The META.txt is created by downloadAssignments
+# feedback.txt, by whatever evaluation method used..
+# CourseCode is the initial part in the Canvas course name, use
+# listMyCourses to identify these. Then AssignmentID is either the
+# initial string of the Assignment name, or the ID. Use listAssignments
+# to see the assignment strings and IDs.
 #
+# Options;
+# --dryrun | -d  Do everything, BUT send data to Canvas.
+# --push | -p    Push grades, even if already set. Usefull
+#                if a grade needs to be changed.
+# --late | -l    Late submissions, right now does not do anything.
+#                Might change in later versions. 
+# --missing | -m Deal with missing submissions.
+#                It just prints those that did not submit.
+# --verbose | -v Verbose output, enables also late + missing. 
 #
 ## Requires a CANVAS token in TOKEN
 ## Requires Openstack credentials to be sourced.
@@ -162,6 +180,15 @@ fi
 
 #TEST
 assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "^$assignment\*" )
+
+if [ -z "$assignmentData" ]; then
+    echo "Did not find the 'assignment_string', checking ID." 
+    assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "$assignment" )
+    
+    echo "$assignmentData"
+    echo "--------------"
+fi
+
 
 
 assignmentID=$(echo "$assignmentData" | awk -F'*' '{print $2}')
