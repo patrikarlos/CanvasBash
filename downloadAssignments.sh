@@ -65,7 +65,7 @@ while getopts glmvhi:-: OPT; do
 	    LATE=true
 	    ;;	
         h)
-            echo "usage: $0 [-v] [--late] [--missing] <COURSECODE> <ASSIGNMENT>" >&2
+            echo "usage: $0 [-v] [--late] [--missing] [--graded] <COURSECODE> <ASSIGNMENT>" >&2
             exit 2
             ;;
 
@@ -159,6 +159,14 @@ fi
 #TEST
 assignmentsData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"')
 assignmentData=$(echo "$assignmentsData" | grep "$assignment\*")
+
+if [ -z "$assignmentData" ]; then
+    echo "Did not find the 'assignment_string', checking ID." 
+    assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments?per_page=$maxEntries" | jq -r '.[] | {name, id}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"' | grep "$assignment" )
+    
+    echo "$assignmentData"
+    echo "--------------"
+fi
 
 
 assignmentID=$(echo "$assignmentData" | awk -F'*' '{print $2}')
