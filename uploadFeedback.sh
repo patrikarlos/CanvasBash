@@ -40,6 +40,7 @@ site=bth
 ##Used due to Canvas pagination, normally canvas returns the equivalent of 10.
 ##This changes it to maxEntries. However, be carefull. 
 maxEntries=10000;
+FEEDBACKLIMIT=10000;
 
 die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
 needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
@@ -395,7 +396,7 @@ while read line; do
 		echo -e "\tGrade: $GRADE "
 	    fi	    
 	fi
-	if [[ "$fsize_feedback" -gt 45 ]]; then
+	if [[ "$fsize_feedback" -gt "$FEEDBACKLIMIT" ]]; then
 	    upload+="feedback.txt"
 	fi
 
