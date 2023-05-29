@@ -192,8 +192,34 @@ if [ -z "$assignmentID" ]; then
     exit;
 fi
 
+#Is Assignment a group, identify group_category_id
 
-echo "Course ID: $courseID - $courseString  Assignment: $assignmentID - $assignmentString"
+groupCategoryID=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID" | jq '.group_category_id')
+
+
+echo -n "Course ID: $courseID - $courseString  Assignment: $assignmentID - $assignmentString "
+if [[ "$groupCategoryID" == 'null' ]]; then
+    echo " No group"
+    groupCategoryID=""
+else
+    echo " Group: $groupCategoryID"
+    Groups="Bogs "
+    #Read in Group data.
+    
+    ##GET GroupID, Name and MEmber counts.
+#    GRPDATA=$(curl -s -H "Authorization: Bearer $TOKEN" "https://bth.instructure.com/api/v1/group_categories/$groupCategoryID/groups" | jq '.[] | {id, name, members_count}'  | jq -r '[.id, .name, .members_count] | @csv')
+
+    ##Based on BETA functionallity
+    ## List of "NAME1, NAME2":CanvasIDuser:GroupName:GroupID
+    GRPDATA=$(curl -s -H "Authorization: Bearer $TOKEN" "https://bth.instructure.com/api/v1/group_categories/$groupCategoryID/export" | awk -F',' '{print $1","$2":"$3":"$7":"$8}' )
+    Groups=$(echo "$GRPDATA" | awk -F':' '{print $3,$4}' | sort  | uniq -c  | grep -v 'canvas_group_id'  | awk '{if ($2) print $0}' | wc -l | tr -d ' ')
+
+	      
+fi
+#echo "DEBUG (GCI): $groupCategoryID"
+echo "There are $Groups groups"
+
+
 
 ## Grab student id + names.
 ##PRODUCTION
@@ -254,18 +280,41 @@ while read line; do
 	continue;
     fi
 
+    ##Check group?
+    if [ -z "$groupCategoryID" ]; then
+	echo "No Groups present"
+	myGroup=""
+    else
+#	echo "Groups present, lets check student."
+	myGroup=$(echo "$GRPDATA" | grep "$ID")
+#	echo "myGroupLINE=|$myGroup|"
+	myGRPname=$(echo "$myGroup" | awk -F':' '{print $3}')
+	myGRPid=$(echo "$myGroup" | awk -F':' '{print $4}')
+	
+    fi
+
+    
+    if [ ! -z "$myGRPname" ]; then
+#	echo "Is there a groupname of |$myGRPname|?"
+	saveFolderName=$(echo "$myGRPname" | tr ' ' '_')
+    else
+	#Translate NAME to a FOLDER"  ie (replace ' '  with '_'
+	saveFolderName=$(echo "$NAME" | tr ' ' '_')
+    fi
     
     
-    #Translate NAME to a FOLDER"  ie (replace ' '  with '_'
-    studFolderName=$(echo "$NAME" | tr ' ' '_')
-    noAttachements=$(echo "$aData" | wc -l | tr -d ' ')								     
+#    noAttachements=$(echo "$aData" | wc -l | tr -d ' ')								     
 #    echo " $noAttachements"
 
 
     
-    echo -n "$ID -- $NAME -- $EMAIL -> $location/$studFolderName "
+
+    
+    echo -n "$ID -- $NAME -- $EMAIL -> $location/$saveFolderName "
 
 
+
+    
     
     noSubmission=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep unsubmitted)
     submissionGraded=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq | grep workflow_state | grep graded)
@@ -289,9 +338,10 @@ while read line; do
 	fi
 	
 	#Create dir, abort if failed.?
-	mkdir -p $location/$studFolderName
+	#When it exits??
+	mkdir -p $location/$saveFolderName
 	if [ $? -ne 0 ]; then
-	    echo "Cant create $location/$studFolderName";
+	    echo "Cant create $location/$saveFolderName";
 	    exit;
 	fi
 
@@ -342,23 +392,27 @@ while read line; do
 	if [ -z "$lateSeconds" ]; then lateSeconds="0";  fi
 	
 
-	echo -e "ID:$ID\nNAME:$NAME\nEMAIL:$EMAIL\nCANVASDLNAME:$canvasDownloadName" > "$location/$studFolderName/META.txt"
-	echo -e "GRADE:$grade\nGRADEDAT:$gradedat\nGRADERID:$graderid\nLATESECONDS:$lateSeconds\nLATEDAYS:$lateDays\nLATEHOURS:$lateHours\nSUBMITTEDAT:$submittedat" >> "$location/$studFolderName/META.txt"
+	echo -e "ID:$ID\nNAME:$NAME\nEMAIL:$EMAIL\nCANVASDLNAME:$canvasDownloadName" > "$location/$saveFolderName/META.txt"
+	echo -e "GRADE:$grade\nGRADEDAT:$gradedat\nGRADERID:$graderid\nLATESECONDS:$lateSeconds\nLATEDAYS:$lateDays\nLATEHOURS:$lateHours\nSUBMITTEDAT:$submittedat" >> "$location/$saveFolderName/META.txt"
 
-
+	
+	if [ ! -z "$myGroup" ]; then
+	    echo  "$myGroup" >> "$location/$saveFolderName/GROUP.txt"
+	fi
+	    
 	##if student submitted a URL
 	urlData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq '.url' | tr -d '"')
 	if [[ ! -z "$urlData" ]];then
 	    echo -en "\t$urlData."
-	    echo "$urlData" > "$location/$studFolderName/submitted_url"
+	    echo "$urlData" > "$location/$saveFolderName/submitted_url"
 
 	    datum1=$(date +%s)
 	    datum2=$(date)
 	    echo -n " Saved."
-	    echo "URL:$urlData" >> "$location/$studFolderName/META.txt"
-	    echo "FILE:submitted_url/$datum1/($datum2)" >> "$location/$studFolderName/META.txt"
-	    fileHASH=$($HASHALGO $HASHARG "$location/$studFolderName/submitted_url" )
-	    echo "FILEHASH:submitted_url/$fileHASH" >> "$location/$studFolderName/META.txt"
+	    echo "URL:$urlData" >> "$location/$saveFolderName/META.txt"
+	    echo "FILE:submitted_url/$datum1/($datum2)" >> "$location/$saveFolderName/META.txt"
+	    fileHASH=$($HASHALGO $HASHARG "$location/$saveFolderName/submitted_url" )
+	    echo "FILEHASH:submitted_url/$fileHASH" >> "$location/$saveFolderName/META.txt"
 	    echo " Hashed "
 	    
 	fi
@@ -402,17 +456,17 @@ while read line; do
 	    
 	    
 #	    echo " "
-#	    echo "Download curl --output \"$location/$studFolderName/$dname\" -L \"$url\" "
-	    curl -s --output "$location/$studFolderName/$dname" -L "$url"
+#	    echo "Download curl --output \"$location/$saveFolderName/$dname\" -L \"$url\" "
+	    curl -s --output "$location/$saveFolderName/$dname" -L "$url"
 	    if [ $? -ne 0 ]; then
 		echo " Problems downloading."
 	    else
 		datum1=$(date +%s)
 		datum2=$(date)
 		echo -n " Downloaded."
-		echo "FILE:$dname/$datum1/($datum2)" >> "$location/$studFolderName/META.txt"
-		fileHASH=$($HASHALGO $HASHARG "$location/$studFolderName/$dname" )
-		echo "FILEHASH:$dname/$fileHASH" >> "$location/$studFolderName/META.txt"
+		echo "FILE:$dname/$datum1/($datum2)" >> "$location/$saveFolderName/META.txt"
+		fileHASH=$($HASHALGO $HASHARG "$location/$saveFolderName/$dname" )
+		echo "FILEHASH:$dname/$fileHASH" >> "$location/$saveFolderName/META.txt"
 		echo " Hashed "
 	    fi
 
@@ -425,10 +479,10 @@ while read line; do
 	else
 	    
 	    comments=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID?include[]=submission_comments" | jq '.submission_comments[] | {created_at,author,comment}' | jq --slurp 'map({date: .created_at, who: .author.display_name, com: .comment})' | jq --slurp '.[] | sort_by(.date)' | jq '.[] | "\(.date), \(.who), \(.com)"')
-	    echo "$comments" > $location/$studFolderName/comments.txt
+	    echo "$comments" > $location/$saveFolderName/comments.txt
 	    commentCNT=$(echo "$comments" | wc -l | tr -d ' ')
-	    echo -e "\t$commentCNT comments found -> $location/$studFolderName/comments.txt"
-	    echo -e "COMMENT:comments" >> "$location/$studFolderName/META.txt"
+	    echo -e "\t$commentCNT comments found -> $location/$saveFolderName/comments.txt"
+	    echo -e "COMMENT:comments" >> "$location/$saveFolderName/META.txt"
 	fi
 	
 	##Grab similarity ratings
@@ -442,8 +496,8 @@ while read line; do
 
 
 	echo -e "\tPlagiarism report(s)"
-	if [ -f "$location/$studFolderName/turnitin.txt" ]; then
-	    rm -f "$location/$studFolderName/turnitin.txt"
+	if [ -f "$location/$saveFolderName/turnitin.txt" ]; then
+	    rm -f "$location/$saveFolderName/turnitin.txt"
 	fi
 	
 	while read turnData; do
@@ -457,17 +511,19 @@ while read line; do
 #	    echo "--------"
 	    if [ -z "$score" ]; then
 		echo -e "\t\t$fname ($fnID) No analysis done."
-		echo "$fname ($fnID) No analysis done." >>  "$location/$studFolderName/turnitin.txt"
+		echo "$fname ($fnID) No analysis done." >>  "$location/$saveFolderName/turnitin.txt"
 		
 	    else
 		echo -e "\t\t$fname ($fnID) $score $reportURL"
-		echo "$fname ($fnID) $score $reportURL" >>  "$location/$studFolderName/turnitin.txt"
+		echo "$fname ($fnID) $score $reportURL" >>  "$location/$saveFolderName/turnitin.txt"
 	    fi
 #	    echo -e "\t$info - $turnData"
 	    
 	done < <(echo "$turnit")
 	
 	#	    echo " "
+
+	## Group Mess???
 	
 	
     else
