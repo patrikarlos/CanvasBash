@@ -16,3 +16,17 @@ downloadAssignments
 	Downloads all submissions for a specified assignment in a particular course.
 
 
+
+
+#In assignment group_category_id.
+
+curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/group_categories/GRPID:" | jq
+
+List groups in Category
+curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/group_categories/GRPID:/groups" | jq
+
+List users in Category
+curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/group_categories/GRPID:/users" | jq
+
+Export users and group from category, in a CSV format.
+curl -s -H "Authorization: Bearer $TOKEN" "https://$site.instructure.com/api/v1/group_categories/GRPID:/export"
