@@ -40,7 +40,7 @@ site=bth
 ##Used due to Canvas pagination, normally canvas returns the equivalent of 10.
 ##This changes it to maxEntries. However, be carefull. 
 maxEntries=10000;
-FEEDBACKLIMIT=10000;
+FEEDBACKLIMIT=1000;
 
 die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
 needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
@@ -406,16 +406,17 @@ while read line; do
 	    echo -en "\tPush feedback to Canvas, feedback is $fsize_feedback bytes."
 	    ##Send feedback
 	    if [[ "$DRYRUN" == "1" ]]; then
-		if [[ "$fsize_feedback" -lt 45 ]]; then
+		if [[ "$fsize_feedback" -lt "$FEEDBACKLIMIT" ]]; then
 		    echo -e "\t**DRYRUN** Sending Feedback\n<begin>\n$feedback_string\n<end>\n"
 		else
 		    echo -e "\t**DRYRUN** Sending Feedback\n<begin>\nTRUNCATED (>45chars)\n<end>\n"
 		fi
 	    else
 		echo -e "\t\tSENDING."
+		
 		#	    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" -d "submission[posted_grade]=$GRADE" | jq )
 
-		if [[ "$fsize_feedback" -lt 45 ]]; then
+		if [[ "$fsize_feedback" -lt "$FEEDBACKLIMIT" ]]; then
 		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" | jq | grep comment | grep "$feedback_string" | wc -l )
 		else
 		    echo -e "\tThe feedback was long, sending file."
