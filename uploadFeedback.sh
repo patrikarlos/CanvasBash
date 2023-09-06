@@ -338,6 +338,7 @@ while read line; do
 	    echo -e "\tNo feedback.txt found, has it been reviewed?"
 	fi
 
+	
 
 	upload=""
 	findFiles=$(grep FILE: "$location/$studFolderName/META.txt" | awk -F: '{print $2}' | awk -F'/' '{print $1}' )
@@ -372,6 +373,7 @@ while read line; do
 		upload+="$file\n"
 	    fi
 
+
 	done < <(echo "$findFiles")
 
 
@@ -400,6 +402,15 @@ while read line; do
 	    upload+="feedback.txt"
 	fi
 
+	attemptID=$(grep "ATTEMPT:" "$location/$studFolderName/META.txt" | awk -F: '{print $2}' )
+	if [[ -z "$attemptID" ]]; then
+	    echo "Did not get an attempt id, using default=1"
+	    attemptID=1;
+	else
+	    echo "attempt=$attemptID"
+	fi
+
+	
 	echo -e "\tUpload: $upload"
 
 	if [ "$FEEDBACK" -eq "1" ]; then
@@ -417,11 +428,11 @@ while read line; do
 		#	    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" -d "submission[posted_grade]=$GRADE" | jq )
 
 		if [[ "$fsize_feedback" -lt "$FEEDBACKLIMIT" ]]; then
-		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" | jq | grep comment | grep "$feedback_string" | wc -l )
+		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$feedback_string" -d "comment[attempt]=$attemptID" | jq | grep comment | grep "$feedback_string" | wc -l )
 		else
 		    echo -e "\tThe feedback was long, sending file."
 		    SHORT_FEEDBACK="See attached file, feedback.txt"
-		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$SHORT_FEEDBACK" | jq | grep comment | grep "$SHORT_FEEDBACK" | wc -l )
+		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=$SHORT_FEEDBACK"  -d "comment[attempt]=$attemptID" | jq | grep comment | grep "$SHORT_FEEDBACK" | wc -l )
 		fi
 		
 		if [ "$sendFeedback" -eq 0 ]; then
@@ -474,7 +485,7 @@ while read line; do
 		    echo "fileID=$fileID"
 		    
 		    #		echo "curl -s -H \"Authorization: Bearer $TOKEN\" -X PUT  \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID\" -d \"comment[text_comment]=Uploaded File:$fname\" -d \"comment[file_ids]=$fileID\" "
-		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=Uploaded File:$fname" -d "comment[file_ids]=$fileID" | jq | grep comment | grep "Uploaded File:$fname" | wc -l)
+		    sendFeedback=$(curl -s -H "Authorization: Bearer $TOKEN" -X PUT  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" -d "comment[text_comment]=Uploaded File:$fname" -d "comment[file_ids]=$fileID"  -d "comment[attempt]=$attemptID" | jq | grep comment | grep "Uploaded File:$fname" | wc -l)
 		    #		echo "sendFeedback=|$sendFeedback|"
 		    if [ "$sendFeedback" -eq 0 ]; then
 			echo "Problems sending feedback (as comment)"

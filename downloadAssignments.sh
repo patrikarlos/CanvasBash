@@ -194,7 +194,13 @@ fi
 
 #Is Assignment a group, identify group_category_id
 
-groupCategoryID=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID" | jq '.group_category_id')
+assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID")
+groupCategoryID=$(echo "$assignmentData" | jq '.group_category_id')
+
+gradingStdID=$(echo "$assignmentData" | jq '.grading_standard_id')
+gradingType=$(echo "$assignmentData" | jq '.grading_type')
+points=$(echo "$assignmentData" | jq '.possible_points')
+
 
 
 echo -n "Course ID: $courseID - $courseString  Assignment: $assignmentID - $assignmentString "
@@ -345,14 +351,16 @@ while read line; do
 	    exit;
 	fi
 
-	
-	metaData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq '{grade,graded_at,grader_id,seconds_late,submitted_at} | to_entries|map(.value)|@csv ')
+
+	echo "curl -H \"Authorization: Bearer $TOKEN\" -s  \"https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID\" "
+	metaData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID/submissions/$ID" | jq '{grade,graded_at,grader_id,seconds_late,submitted_at,attempt} | to_entries|map(.value)|@csv ')
 
 	grade=$(echo "$metaData" | awk -F',' '{print $1}' | tr -d '"\\')
 	gradedat=$(echo "$metaData" | awk -F',' '{print $2}' | tr -d '"\\')
 	graderid=$(echo "$metaData" | awk -F',' '{print $3}' | tr -d '"\\')
 	lateSeconds=$(echo "$metaData" | awk -F',' '{print $4}' | tr -d '"\\')
 	submittedat=$(echo "$metaData" | awk -F',' '{print $5}' | tr -d '"\\')
+	attemptid=$(echo "$metaData" | awk -F',' '{print $6}' | tr -d '"\\')
 
 	lateDays=$(echo "scale=0; $lateSeconds/86400"|bc )
 	lateHours=$(echo "scale=0; $lateSeconds/3600"|bc )
@@ -374,14 +382,14 @@ while read line; do
 	    lateTime="Not late"
 	else
 	    if [ -z "$lateStudents" ]; then
-		lateStudents="$ID -- $NAME -- $EMAIL -- $lateTime ($lateSeconds)"
+		lateStudents="$ID -- $NAME -- $EMAIL -- $lateTime ($lateSeconds) attempt $attemptid "
 	    else
-		lateStudents="$lateStudents\n$ID -- $NAME -- $EMAIL -- $lateTime ($lateSeconds)"
+		lateStudents="$lateStudents\n$ID -- $NAME -- $EMAIL -- $lateTime ($lateSeconds) attempt $attemptid"
 	    fi
 	fi
 	
 	if [ -z "$grade" ]; then	   
-	    echo -e "\tAssignment has not been graded, it was submitted on $submittedat ($lateTime)"
+	    echo -e "\tAssignment has not been graded, it was submitted on $submittedat ($lateTime) attempt number $attemptid. "
 	else
 	    echo -e "\tMETA:$grade, $gradedat, $graderid ($graderName), $submittedat ($lateTime)"
 	fi
@@ -393,7 +401,7 @@ while read line; do
 	
 
 	echo -e "ID:$ID\nNAME:$NAME\nEMAIL:$EMAIL\nCANVASDLNAME:$canvasDownloadName" > "$location/$saveFolderName/META.txt"
-	echo -e "GRADE:$grade\nGRADEDAT:$gradedat\nGRADERID:$graderid\nLATESECONDS:$lateSeconds\nLATEDAYS:$lateDays\nLATEHOURS:$lateHours\nSUBMITTEDAT:$submittedat" >> "$location/$saveFolderName/META.txt"
+	echo -e "GRADE:$grade\nGRADEDAT:$gradedat\nGRADERID:$graderid\nLATESECONDS:$lateSeconds\nLATEDAYS:$lateDays\nLATEHOURS:$lateHours\nSUBMITTEDAT:$submittedat\nATTEMPT:$attemptid" >> "$location/$saveFolderName/META.txt"
 
 	
 	if [ ! -z "$myGroup" ]; then
