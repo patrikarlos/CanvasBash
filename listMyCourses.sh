@@ -74,6 +74,11 @@ if [ -z "$role" ]; then
     echo "Looking for all roles"
     role="teacher student ta obsererver designer"
 else
+    if [[ "teacher student ta obsererver designer" != *"$role"* ]]; then
+	echo "'$role' is not a valid role. Only 'teacher student ta obsererver designer' are accepted roles."
+	exit;
+    fi
+
     echo "Looking only for $role."
 fi
 
