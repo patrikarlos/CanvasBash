@@ -110,7 +110,14 @@ if [ -z "$location" ]; then
     exit;
 fi
 
-echo  "My input; '$courseCode' / $assignment "
+echo  "My input; '$courseCode' / $assignment / $location"
+
+if ! [[ "$courseCode" =~ ^[a-zA-Z]{1,3} ]]; then
+    echo "Argument should be the beginning of a course code."
+    echo "At BTH that is for instance dv2602. "
+    exit;
+fi
+
 
 
 
@@ -197,13 +204,14 @@ fi
 assignmentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/assignments/$assignmentID")
 groupCategoryID=$(echo "$assignmentData" | jq '.group_category_id')
 
-gradingStdID=$(echo "$assignmentData" | jq '.grading_standard_id')
-gradingType=$(echo "$assignmentData" | jq '.grading_type')
-points=$(echo "$assignmentData" | jq '.possible_points')
 
+gradingType=$(echo "$assignmentData" | jq '.grading_type')
+points=$(echo "$assignmentData" | jq '.points_possible')
+gradingStdID=$(echo "$assignmentData" | jq '.grading_standard_id')
 
 
 echo -n "Course ID: $courseID - $courseString  Assignment: $assignmentID - $assignmentString "
+echo -n "gradingStdID: $gradingStdID - gradingType: $gradingType - points: $points "
 if [[ "$groupCategoryID" == 'null' ]]; then
     echo " No group"
     groupCategoryID=""
