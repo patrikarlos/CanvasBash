@@ -59,7 +59,8 @@ while getopts vh:-: OPT; do
             exit 2
             ;;
 
-        v) 
+        v)
+	    echo "Verbose activated"
 	    VERBOSE=true
             ;;
         *)
@@ -88,8 +89,9 @@ if [ -z "$courseCode" ]; then
     exit;
 fi
 
-
-echo  "My input; '$courseCode'"
+if [ "$VERBOSE" = true ]; then
+    echo  "My input; '$courseCode'"
+fi
 
 if ! [[ "$courseCode" =~ ^[a-zA-Z]{1,3} ]]; then
     echo "Argument should be the beginning of a course code."
@@ -113,10 +115,11 @@ courseString=$(echo "$courseData" | awk -F'*' '{print $1}')
 
 found=$(echo "$courseID" | wc -l | tr -d ' ')
 
-echo "|$courseData|$courseID|$courseString|$found|"
+
 
 
 if [ "$VERBOSE" = true ]; then
+    echo "|$courseData|$courseID|$courseString|$found|"
     echo "found $found"
 fi
 
@@ -133,13 +136,13 @@ if [ -z "$courseID" ]; then
     exit;
 fi
 
-echo "Course ID: $courseID - $courseString "
+
 
 
 data1=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID")
 name=$(echo $data1 | jq '.name')
 if [ "$VERBOSE" = true ]; then
-    echo "Course: $name"
+    echo "Course ID: $courseID - $courseString - $name"
 fi
 
 
@@ -157,6 +160,7 @@ sections_w_studentcnt=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$sit
 studentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/users?per_page=$maxEntries" | jq -r '.[] | {id,sortable_name,email}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"')
 
 
+echo "First Name, Last Name, Email Address"
 
 while read line; do
     read -r data <<<"$(echo "$line")"
@@ -167,8 +171,12 @@ while read line; do
 
     LASTNAME=$(echo "$NAME" | awk -F',' '{print $1}' | sed 's/^[ \t]*//')
     FIRSTNAME=$(echo "$NAME" | awk -F',' '{print $2}' | sed 's/^[ \t]*//')
-    
-    
-    echo "$LASTNAME,$FIRSTNAME,$EMAIL"
+
+    ## Before printing, verify that it is a student, and not something else, like teacher.
+    ## Perhaps use sections to identify students/teachers, alt. see assignments? 
+
+    ## COnfig this to be an input option  --lfe, --fle, --efl, --elf, --en
+#    echo "$LASTNAME,$FIRSTNAME,$EMAIL"
+    echo "$FIRSTNAME,$LASTNAME,$EMAIL"
 
 done < <(echo "$studentData" ) # | head -10 )
