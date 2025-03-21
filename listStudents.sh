@@ -133,7 +133,7 @@ if [ -z "$courseID" ]; then
     exit;
 fi
 
-#echo "Course ID: $courseID - $courseString "
+echo "Course ID: $courseID - $courseString "
 
 
 data1=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID")
@@ -142,7 +142,18 @@ if [ "$VERBOSE" = true ]; then
     echo "Course: $name"
 fi
 
-#TEST
+
+## Get sections
+sections_w_studentcnt=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/sections?include[]=total_students&per_page=$maxEntries" | jq -r '.[] | {id,name,total_students}'|  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"')
+
+#Get students per section
+#curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/sections?include[]=students&per_page=$maxEntries" | jq
+
+#Get total students per section
+#curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/sections?include[]=total_students&per_page=$maxEntries" | jq
+
+
+#Get students
 studentData=$(curl -H "Authorization: Bearer $TOKEN" -s  "https://$site.instructure.com/api/v1/courses/$courseID/users?per_page=$maxEntries" | jq -r '.[] | {id,sortable_name,email}' |  jq "[.[]] | @tsv" | sed 's/\\t/*/g' | tr -d '"')
 
 
@@ -160,4 +171,4 @@ while read line; do
     
     echo "$LASTNAME,$FIRSTNAME,$EMAIL"
 
-done < <(echo "$studentData" | head -10 )
+done < <(echo "$studentData" ) # | head -10 )
